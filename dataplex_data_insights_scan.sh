@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # ============================================================
-# Dataplex Data Documentation Scan - REST API
+# Dataplex Data Documentation Scan - COMPLETE WORKING VERSION
 # 
 # This script creates and runs Dataplex Data Documentation scans
-# for all views (or tables) in a BigQuery dataset using the REST API.
+# for all views (or tables) in a BigQuery dataset.
+# 
+# INCLUDES: Automatic label addition for BigQuery insights!
 # 
 # Requirements:
 # - gcloud CLI installed and authenticated
@@ -29,7 +31,7 @@ LOCATION="us-central1"                 # Dataplex location (e.g., us-central1, u
 # For VIEWS: awk '$2 == "VIEW" {print $1}'
 # For TABLES: awk '$2 == "TABLE" {print $1}'
 # For ALL: awk 'NR>1 && $1 != "tableId" {print $1}'
-TABLE_FILTER='$2 == "VIEW" {print $1}'
+TABLE_FILTER='NR>1 && $1 != "tableId" {print $1}'
 
 # ============================================================
 # SCRIPT START - NO CHANGES NEEDED BELOW THIS LINE
@@ -37,7 +39,7 @@ TABLE_FILTER='$2 == "VIEW" {print $1}'
 
 echo "=========================================="
 echo "Dataplex Data Documentation Scan"
-echo "REST API Version"
+echo "Complete Working Version with Auto-Labels"
 echo "=========================================="
 echo ""
 echo "Configuration:"
@@ -116,6 +118,10 @@ FAILED=0
 SUCCESS=0
 API_URL="https://dataplex.googleapis.com/v1/projects/$PROJECT_ID/locations/$LOCATION/dataScans"
 
+# Store scan IDs and table names for final verification and label addition
+declare -a SCAN_IDS
+declare -a TABLE_NAMES
+
 echo "$TABLES" | while IFS= read -r TABLE_NAME; do
   # Skip empty lines
   if [ -z "$TABLE_NAME" ]; then
@@ -130,26 +136,29 @@ echo "$TABLES" | while IFS= read -r TABLE_NAME; do
   echo "[$CREATED/$TABLE_COUNT] $TABLE_NAME"
   echo "   Scan ID: $SCAN_ID"
    
-  # Create scan using REST API
+  # Create scan using REST API with FIXED JSON (generationScopes as array)
   CREATE_RESPONSE=$(curl -s -X POST \
     "${API_URL}?dataScanId=${SCAN_ID}" \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
-    -d '{
-      "data": {
-        "resource": "//bigquery.googleapis.com/projects/'$PROJECT_ID'/datasets/'$DATASET_ID'/tables/'$TABLE_NAME'"
-      },
-      "executionSpec": {
-        "trigger": {
-          "onDemand": {}
-        }
-      },
-      "type": "DATA_DOCUMENTATION",
-      "dataDocumentationSpec": {
-        "generationScopes": "ALL",
-        "catalogPublishingEnabled": true
-      }
-    }' 2>/dev/null)
+    -d @- <<EOF
+{
+  "data": {
+    "resource": "//bigquery.googleapis.com/projects/${PROJECT_ID}/datasets/${DATASET_ID}/tables/${TABLE_NAME}"
+  },
+  "executionSpec": {
+    "trigger": {
+      "onDemand": {}
+    }
+  },
+  "type": "DATA_DOCUMENTATION",
+  "dataDocumentationSpec": {
+    "generationScopes": ["ALL"],
+    "catalogPublishingEnabled": true
+  }
+}
+EOF
+)
    
   # Check if there's an error in the response
   if echo "$CREATE_RESPONSE" | grep -q '"error"'; then
@@ -214,23 +223,49 @@ echo "$TABLES" | while IFS= read -r TABLE_NAME; do
   # Small additional delay
   sleep 2
    
-  # Run the scan
-  RUN_URL="https://dataplex.googleapis.com/v1/${TARGET_NAME}:run"
+  # Run the scan using gcloud
+  echo "   🚀 Triggering scan execution..."
   
-  RUN_RESPONSE=$(curl -s -X POST \
-    "$RUN_URL" \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "Content-Type: application/json" 2>/dev/null)
-   
-  if echo "$RUN_RESPONSE" | grep -q '"name"\|"state"'; then
-    echo "   ✓ Scan started successfully"
-    ((SUCCESS++))
-  else
-    echo "   ✗ Failed to run scan"
-    if echo "$RUN_RESPONSE" | grep -q '"error"'; then
-      ERROR_MSG=$(echo "$RUN_RESPONSE" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
-      echo "   Error: $ERROR_MSG"
+  if gcloud dataplex datascans run "$SCAN_ID" \
+    --project="$PROJECT_ID" \
+    --location="$LOCATION" \
+    --quiet 2>/dev/null; then
+    
+    # Verify job was created
+    sleep 3
+    JOB_STATUS=$(gcloud dataplex datascans jobs list \
+      --datascan="$SCAN_ID" \
+      --project="$PROJECT_ID" \
+      --location="$LOCATION" \
+      --limit=1 \
+      --format="value(state)" 2>/dev/null)
+    
+    if [ ! -z "$JOB_STATUS" ]; then
+      echo "   ✓ Scan started (Status: $JOB_STATUS)"
+      
+      # Add labels to the table/view for publishing results to BigQuery
+      echo "   📝 Adding documentation labels to table..."
+      if bq update \
+        --set_label dataplex-data-documentation-published-scan:"${SCAN_ID}" \
+        --set_label dataplex-data-documentation-published-project:"${PROJECT_ID}" \
+        --set_label dataplex-data-documentation-published-location:"${LOCATION}" \
+        "${PROJECT_ID}:${DATASET_ID}.${TABLE_NAME}" 2>/dev/null; then
+        echo "   ✓ Labels added - insights will appear in BigQuery"
+      else
+        echo "   ⚠️  Failed to add labels (insights may not appear in BigQuery)"
+      fi
+      
+      ((SUCCESS++))
+      SCAN_IDS+=("$SCAN_ID")
+      TABLE_NAMES+=("$TABLE_NAME")
+    else
+      echo "   ⚠️  Scan triggered but job status unknown"
+      ((SUCCESS++))
+      SCAN_IDS+=("$SCAN_ID")
+      TABLE_NAMES+=("$TABLE_NAME")
     fi
+  else
+    echo "   ✗ Failed to trigger scan execution"
     ((FAILED++))
   fi
    
@@ -238,27 +273,79 @@ echo "$TABLES" | while IFS= read -r TABLE_NAME; do
 done
 
 echo "=========================================="
-echo "✓ COMPLETE!"
+echo "✓ SCAN CREATION COMPLETE!"
 echo "=========================================="
 echo ""
 echo "Summary:"
 echo "  Total processed: $CREATED"
-echo "  Successful: $SUCCESS"
+echo "  Successfully started: $SUCCESS"
 echo "  Failed: $FAILED"
 echo ""
+
+if [ $SUCCESS -gt 0 ]; then
+  echo "=========================================="
+  echo "Checking scan execution status..."
+  echo "=========================================="
+  echo ""
+  
+  # Wait a moment for jobs to initialize
+  sleep 5
+  
+  for SCAN_ID in "${SCAN_IDS[@]}"; do
+    JOB_INFO=$(gcloud dataplex datascans jobs list \
+      --datascan="$SCAN_ID" \
+      --project="$PROJECT_ID" \
+      --location="$LOCATION" \
+      --limit=1 \
+      --format="value(name.basename(),state)" 2>/dev/null)
+    
+    if [ ! -z "$JOB_INFO" ]; then
+      JOB_ID=$(echo "$JOB_INFO" | awk '{print $1}')
+      JOB_STATE=$(echo "$JOB_INFO" | awk '{print $2}')
+      
+      STATUS_ICON="⏳"
+      if [ "$JOB_STATE" = "SUCCEEDED" ]; then
+        STATUS_ICON="✅"
+      elif [ "$JOB_STATE" = "FAILED" ]; then
+        STATUS_ICON="❌"
+      elif [ "$JOB_STATE" = "RUNNING" ]; then
+        STATUS_ICON="🏃"
+      fi
+      
+      echo "$STATUS_ICON $SCAN_ID: $JOB_STATE"
+    else
+      echo "⚠️  $SCAN_ID: No job found"
+    fi
+  done
+  
+  echo ""
+fi
+
+echo "=========================================="
 echo "Next Steps:"
-echo "  1. Wait 2-5 minutes for scans to complete"
-echo "  2. View results in BigQuery Console"
-echo "  3. Navigate to your table/view and click 'Insights' tab"
+echo "=========================================="
 echo ""
-echo "Useful Links:"
-echo "  • BigQuery Console:"
-echo "    https://console.cloud.google.com/bigquery?project=$PROJECT_ID"
+echo "1. ⏱️  Wait 5-10 minutes for scans to complete"
 echo ""
-echo "  • Dataplex Scans:"
-echo "    https://console.cloud.google.com/dataplex/data-scans?project=$PROJECT_ID"
+echo "2. 📊 View insights in BigQuery:"
+echo "   • Go to: https://console.cloud.google.com/bigquery?project=$PROJECT_ID"
+echo "   • Navigate to dataset: $DATASET_ID"
+echo "   • Click on any table/view"
+echo "   • Click the 'Insights' tab"
+echo "   • AI-generated insights should appear!"
 echo ""
-echo "  • Monitor scans via CLI:"
-echo "    gcloud dataplex data-scans list --project=$PROJECT_ID --location=$LOCATION"
+echo "3. 🔍 Check scan status:"
+echo "   gcloud dataplex datascans list \\"
+echo "     --project=$PROJECT_ID \\"
+echo "     --location=$LOCATION \\"
+echo "     --sort-by=~createTime \\"
+echo "     --limit=20"
 echo ""
+echo "4. ✅ Verify labels were added:"
+echo "   bq show --format=prettyjson \\"
+echo "     $PROJECT_ID:$DATASET_ID.TABLE_NAME | \\"
+echo "     grep dataplex-data-documentation"
+echo ""
+echo "=========================================="
+echo "🎉 All done! Insights will appear in BigQuery once scans complete!"
 echo "=========================================="
