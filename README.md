@@ -28,7 +28,7 @@ Before running this script, ensure you have:
 
 ```bash
 git clone https://github.com/optidus/data_insights_scan.git
-cd dataplex-data-documentation-scanner
+cd data_insights_scan
 2. Configure the Script
 Open dataplex_scan_views.sh and update these variables:
 
