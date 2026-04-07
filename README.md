@@ -1,190 +1,155 @@
-# Dataplex Data Insights Scanner
+# Dataplex Data Documentation Scanner
 
 A bash script to programmatically create and run [Google Cloud Dataplex](https://cloud.google.com/dataplex) Data Documentation scans on all tables or views in a BigQuery dataset using the REST API.
+
+**✨ NEW:** Automatically adds required labels to publish AI-generated insights to BigQuery!
 
 ## 🎯 What This Does
 
 This script automates the process of:
-
 1.  ✅ **Creating Dataplex Data Documentation scans** for all tables/views in a BigQuery dataset.
 2.  ✅ **Running the scans automatically.**
-3.  ✅ **Generating AI-powered insights** that appear in BigQuery's "Insights" tab.
-4.  ✅ **Publishing documentation** to Data Catalog.
+3.  ✅ **Adding required labels** to publish results to BigQuery.
+4.  ✅ **Generating AI-powered insights** that appear in BigQuery's "Insights" tab.
+5.  ✅ **Publishing documentation** to Data Catalog.
 
 ## 📋 Prerequisites
 
 Before running this script, ensure you have:
 
-  * ✅ **Google Cloud SDK** installed ([Installation Guide](https://cloud.google.com/sdk/docs/install))
-  * ✅ **BigQuery CLI (bq)** installed (comes with gcloud)
-  * ✅ **Authenticated** with gcloud: `gcloud auth login`
-  * ✅ **Appropriate IAM permissions**:
-      * `roles/dataplex.editor` or `roles/dataplex.admin`
-      * `roles/bigquery.dataViewer` or higher on the dataset
-      * `roles/datacatalog.editor` (for catalog publishing)
+*   ✅ **Google Cloud SDK** installed ([Installation Guide](https://cloud.google.com/sdk/docs/install))
+*   ✅ **BigQuery CLI (bq)** installed (comes with gcloud)
+*   ✅ **Authenticated** with gcloud: `gcloud auth login`
+*   ✅ **Appropriate IAM permissions**:
+    *   `roles/dataplex.editor` or `roles/dataplex.admin`
+    *   `roles/bigquery.dataEditor` (to add labels to tables/views)
+    *   `roles/bigquery.dataViewer` or higher on the dataset
+    *   `roles/datacatalog.editor` (for catalog publishing)
 
 ## 🚀 Quick Start
 
-### 1\. Clone the Repository
-
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/optidus/data_insights_scan.git
 cd data_insights_scan
 ```
 
-### 2\. Configure the Script
-
+### 2. Configure the Script
 Open `dataplex_data_insights_scan.sh` and update these variables:
-
 ```bash
 PROJECT_ID="your-gcp-project-id"
 DATASET_ID="your_bigquery_dataset"
 LOCATION="us-central1"  # Your preferred region
 ```
 
-### 3\. Make the Script Executable
-
+### 3. Make the Script Executable
 ```bash
 chmod +x dataplex_data_insights_scan.sh
 ```
 
-### 4\. Run the Script
-
+### 4. Run the Script
 ```bash
 ./dataplex_data_insights_scan.sh
 ```
 
-The script will:
+### 5. View Insights in BigQuery
+After **5-10 minutes**:
+1.  Go to [BigQuery Console](https://console.cloud.google.com/bigquery).
+2.  Navigate to your dataset and click on a table/view.
+3.  Click the **"Insights"** tab to see AI-generated documentation!
 
-  * List all views/tables in the dataset.
-  * Ask for confirmation.
-  * Create and run scans for each item.
-  * Display progress and results.
-
------
+---
 
 ## ⚙️ Configuration Options
 
 ### Scan Tables Instead of Views
-
-By default, the script scans views only. To scan tables or all objects, modify the `TABLE_FILTER` variable:
+Modify the `TABLE_FILTER` variable in the script to target specific object types:
 
 ```bash
-# For VIEWS only (default)
+# For VIEWS only
 TABLE_FILTER='$2 == "VIEW" {print $1}'
 
 # For TABLES only
 TABLE_FILTER='$2 == "TABLE" {print $1}'
 
-# For ALL tables and views
+# For ALL tables and views (default)
 TABLE_FILTER='NR>1 && $1 != "tableId" {print $1}'
 ```
 
 ### Change Region
+Dataplex requires a specific regional location. Common options:
+```bash
+LOCATION="us-central1"      # Iowa
+LOCATION="us-east1"         # South Carolina
+LOCATION="europe-west1"     # Belgium
+LOCATION="asia-southeast1"  # Singapore
+```
 
-Dataplex requires a specific regional location (not multi-region). Common options:
-
-  * `LOCATION="us-central1"` (Iowa)
-  * `LOCATION="us-east1"` (South Carolina)
-  * `LOCATION="europe-west1"` (Belgium)
-  * `LOCATION="asia-southeast1"` (Singapore)
-
------
+---
 
 ## 📊 Viewing Results
 
-### In BigQuery Console
-
-1.  Go to **BigQuery Console**.
-2.  Navigate to your dataset.
-3.  Click on a table/view.
-4.  Click the **"Insights"** tab.
-5.  Wait 2-5 minutes for scans to complete.
-
 ### Using gcloud CLI
-
 ```bash
-# List all datascans
-gcloud dataplex datascans list \
-  --project=YOUR_PROJECT_ID \
-  --location=us-central1
-
-# Filter for DATA_DOCUMENTATION scans only
+# List all scans
 gcloud dataplex datascans list \
   --project=YOUR_PROJECT_ID \
   --location=us-central1 \
-  --filter="type=DATA_DOCUMENTATION"
+  --sort-by=~createTime
 
-# View a specific scan
-gcloud dataplex datascans describe SCAN_ID \
-  --project=YOUR_PROJECT_ID \
-  --location=us-central1
-
-# View scan execution history
-gcloud dataplex datascans jobs list SCAN_ID \
+# Check specific scan status
+gcloud dataplex datascans jobs list \
+  --datascan=SCAN_ID \
   --project=YOUR_PROJECT_ID \
   --location=us-central1
 ```
 
------
+### Verify Labels Were Added
+```bash
+bq show --format=prettyjson YOUR_PROJECT:YOUR_DATASET.YOUR_TABLE | grep dataplex-data-documentation
+```
+
+---
+
+## 🔍 Understanding Scan Types
+
+| Scan Type | Purpose | Dataplex UI | BigQuery UI | Labels Required? |
+| :--- | :--- | :---: | :---: | :---: |
+| **DATA_PROFILE** | Statistical profiling (min/max/nulls) | ✅ | ✅ (Profile Tab) | ❌ No |
+| **DATA_DOCUMENTATION** | AI-generated insights/docs | ✅ | ✅ (Insights Tab) | ✅ **Yes** |
+
+> [!IMPORTANT]
+> To display **DATA_DOCUMENTATION** in BigQuery, the script adds labels for `published-scan`, `published-project`, and `published-location`.
+
+---
 
 ## 🔧 Troubleshooting
 
-  * **"Failed to get authentication token"**
-      * Run `gcloud auth login` followed by `gcloud auth application-default login`.
-  * **"No tables/views found"**
-      * Verify the dataset name is correct and you have read permissions.
-      * Ensure `TABLE_FILTER` matches your target objects.
-  * **"Permission denied" errors**
-      * Ensure you have the required IAM roles. Use this command to grant access:
-    <!-- end list -->
-    ```bash
-    gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-      --member="user:YOUR_EMAIL@example.com" \
-      --role="roles/dataplex.editor"
-    ```
-  * **"Location not found" errors**
-      * Use a specific regional location (e.g., `us-central1`) instead of multi-regional (e.g., `us`).
+*   **"Failed to get authentication token"**: Run `gcloud auth application-default login`.
+*   **"Insights not appearing"**: 
+    1.  Wait 15 minutes.
+    2.  Check if scan status is `SUCCEEDED`.
+    3.  Verify labels exist on the table via `bq show`.
+*   **"Permission denied"**: Ensure you have `roles/bigquery.dataEditor` to allow the script to write labels to your tables.
 
------
+---
 
 ## 📖 How It Works
+The script uses the **Dataplex REST API** for creation because it offers higher compatibility across SDK versions than the standard `gcloud` command. It then uses the `bq` CLI to "tag" your tables with the scan metadata, which acts as a bridge to surface the AI insights directly within the BigQuery console.
 
-The script uses the Dataplex REST API to:
+## 🛠️ Advanced Usage: Scan Multiple Datasets
+```bash
+#!/bin/bash
+DATASETS=("sales_data" "marketing_data" "product_data")
+for DATASET in "${DATASETS[@]}"; do
+  sed -i "s/DATASET_ID=\".*\"/DATASET_ID=\"$DATASET\"/" dataplex_data_insights_scan.sh
+  ./dataplex_data_insights_scan.sh
+done
+```
 
-1.  Authenticate using your gcloud credentials.
-2.  List tables/views from the specified BigQuery dataset using `bq ls`.
-3.  Create scans via `POST` request to the Dataplex API.
-4.  Poll operations to wait for scan creation to complete (asynchronous).
-5.  Run scans via `POST` request to trigger the scan execution.
+---
 
-### Why REST API Instead of gcloud CLI?
+## 📝 License & Support
+This project is licensed under the **MIT License**. If you encounter issues, please open an issue in the repository or consult the [Dataplex Documentation](https://cloud.google.com/dataplex/docs).
 
-Using the REST API directly ensures compatibility across different gcloud SDK versions and provides more granular control over the scan creation process than the standard CLI commands might offer.
-
------
-
-## 🤝 Contributing
-
-Contributions are welcome\! Please feel free to submit a Pull Request.
-
-1.  Fork the repository.
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-  * Built for **Google Cloud Dataplex**.
-  * Uses **BigQuery** and **Data Catalog**.
-
-## 🔗 Related Resources
-
-  * [Dataplex Data Documentation](https://www.google.com/search?q=https://cloud.google.com/dataplex/docs/data-documentation)
-  * [Dataplex REST API Reference](https://www.google.com/search?q=https://cloud.google.com/dataplex/docs/reference/rest)
-  * [BigQuery Insights](https://www.google.com/search?q=https://cloud.google.com/bigquery/docs/analyze-data-insights)
+**Made with ❤️ for the Google Cloud community.**
