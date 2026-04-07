@@ -30,7 +30,7 @@ Before running this script, ensure you have:
 git clone https://github.com/optidus/data_insights_scan.git
 cd data_insights_scan
 2. Configure the Script
-Open dataplex_scan_views.sh and update these variables:
+Open dataplex_data_insights_scan.sh and update these variables:
 
 PROJECT_ID="your-gcp-project-id"
 DATASET_ID="your_bigquery_dataset"
