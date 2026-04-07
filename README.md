@@ -29,15 +29,15 @@ Before running this script, ensure you have:
 ```bash
 git clone https://github.com/optidus/data_insights_scan.git
 cd data_insights_scan
-2. Configure the Script
+### 2. Configure the Script
 Open dataplex_data_insights_scan.sh and update these variables:
 
 PROJECT_ID="your-gcp-project-id"
 DATASET_ID="your_bigquery_dataset"
 LOCATION="us-central1"  # Your preferred region
-3. Make the Script Executable
+### 3. Make the Script Executable
 chmod +x dataplex_data_insights_scan.sh
-4. Run the Script
+### 4. Run the Script
 ./dataplex_data_insights_scan.sh
 The script will:
 
@@ -116,7 +116,7 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
 "Location not found" errors
 Use a specific regional location (e.g., us-central1) instead of multi-regional (e.g., us).
 
-📖 How It Works
+### 📖 How It Works
 The script uses the Dataplex REST API to:
 
 Authenticate using your gcloud credentials
@@ -128,7 +128,7 @@ Report results with success/failure counts
 Why REST API Instead of gcloud CLI?
 The gcloud dataplex commands may not be available in all gcloud SDK versions. Using the REST API directly ensures compatibility and provides more control over the scan creation process.
 
-🤝 Contributing
+### 🤝 Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 Fork the repository
@@ -136,19 +136,19 @@ Create your feature branch (git checkout -b feature/AmazingFeature)
 Commit your changes (git commit -m 'Add some AmazingFeature')
 Push to the branch (git push origin feature/AmazingFeature)
 Open a Pull Request
-📝 License
+### 📝 License
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-🙏 Acknowledgments
+### 🙏 Acknowledgments
 Built for Google Cloud Dataplex
 Uses BigQuery and Data Catalog
-📧 Support
+### 📧 Support
 If you encounter issues:
 
 Check the Troubleshooting section
 Review Dataplex documentation
 Open an issue in this repository
-🔗 Related Resources
+### 🔗 Related Resources
 Dataplex Data Documentation
 Dataplex REST API Reference
 BigQuery Insights
