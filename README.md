@@ -36,9 +36,9 @@ PROJECT_ID="your-gcp-project-id"
 DATASET_ID="your_bigquery_dataset"
 LOCATION="us-central1"  # Your preferred region
 3. Make the Script Executable
-chmod +x dataplex_scan_views.sh
+chmod +x dataplex_data_insights_scan.sh
 4. Run the Script
-./dataplex_scan_views.sh
+./dataplex_data_insights_scan.sh
 The script will:
 
 List all views/tables in the dataset
@@ -73,13 +73,28 @@ Navigate to your dataset
 Click on a table/view
 Click the "Insights" tab
 Wait 2-5 minutes for scans to complete
-In Dataplex Console
-Go to Dataplex Data Scans
-Filter by your project
-View scan status and results
+
 Using gcloud CLI
-# List all scans
-gcloud dataplex data-scans list --project=YOUR_PROJECT_ID --location=us-central1
+# List all datascans
+gcloud dataplex datascans list \
+  --project=YOUR_PROJECT_ID \
+  --location=us-central1
+
+# Filter for DATA_DOCUMENTATION scans only
+gcloud dataplex datascans list \
+  --project=YOUR_PROJECT_ID \
+  --location=us-central1 \
+  --filter="type=DATA_DOCUMENTATION"
+
+# View a specific scan
+gcloud dataplex datascans describe SCAN_ID \
+  --project=YOUR_PROJECT_ID \
+  --location=us-central1
+
+# View scan execution history
+gcloud dataplex datascans jobs list SCAN_ID \
+  --project=YOUR_PROJECT_ID \
+  --location=us-central1
 
 # View specific scan
 gcloud dataplex data-scans describe SCAN_ID --project=YOUR_PROJECT_ID --location=us-central1
