@@ -1,4 +1,4 @@
-# Dataplex Data Documentation Scanner
+# Dataplex Data Insights Scan
 
 A bash script to programmatically create and run [Google Cloud Dataplex](https://cloud.google.com/dataplex) Data Documentation scans on all tables or views in a BigQuery dataset using the REST API.
 
